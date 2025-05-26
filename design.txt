@@ -1,0 +1,17 @@
+possible goals:
+build a tower of snow to the skies using wood walls and a shovel(collect + throw snow)?
+dig down using walls and shovel?
+you got buried by avalanche, dig out?
+all of the above, in sequential order??
+
+maybe that's the loop. dig down for scrap > dig out > make tower from scrap
+
+or actually, simpler and maybe more gooder.
+you just need to find shit underground, but the ground is kinda alive and stuff (it falls), so you need to build walls for it to not collapse and for successful exploration
+dig down, find shit, make better dig tools
+
+maybe there are changing seasons of extreme cold and extreme hot?
+so that firstly snow falls down, then melts and evaporates
+
+or I need to somehow figure out the intended experience. there already is something there, just need to first pinpoint it, then work on progressing and enhancing it
+if defined well enough, it should make design decisions pretty straightforward
