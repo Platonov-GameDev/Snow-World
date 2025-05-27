@@ -23,7 +23,7 @@ tools :: enum {
 }
 
 WORLD_SIZE := [2]int{ 640, 640 }
-CAM_ZOOM: int = 2
+CAM_ZOOM: int = 8
 PREGEN_HEIGHT := 320
 PREGEN_OFFSET := 5
 PLAYER_MOVE_SPEED := 0.5
@@ -39,6 +39,7 @@ COLORS := [10]rl.Color {
 	rl.Color{ 194, 184, 169, 255 },
 	rl.Color{ 217, 219, 186, 255 },
 }
+WALLHACK := false
 
 cam_pos := [2]int{ }
 player_cells := [6][2]int{ }
@@ -65,9 +66,9 @@ main :: proc() {
 			case -1.0..<0:
 				set_cell(&cells, i, j, powder.EMPTY)
 			case 0..<0.5:
-				set_cell(&cells, i, j, powder.SNOW_STATIC)
-			case:
 				set_cell(&cells, i, j, powder.ICE)
+			case:
+				set_cell(&cells, i, j, powder.SNOW_STATIC)
 			}
 		}
 	}
@@ -138,13 +139,41 @@ main :: proc() {
 			screen_borders.x[1] = cam_pos.x + int(320 / CAM_ZOOM)
 			screen_borders.y[0] = cam_pos.y - int(320 / CAM_ZOOM)
 			screen_borders.y[1] = cam_pos.y + int(320 / CAM_ZOOM)
-			for i := screen_borders.x[0]; i < screen_borders.x[1]; i += 1 {
-				for j := screen_borders.y[0]; j < screen_borders.y[1]; j += 1 {
-					matrix_cell := get_cell(&cells, i, j)
-					if matrix_cell != powder.EMPTY {
-						render_pos := convert_to_screen_pos([2]int{ i, j })
+			if WALLHACK {
+				for i := screen_borders.x[0]; i < screen_borders.x[1]; i += 1 {
+					for j := screen_borders.y[0]; j < screen_borders.y[1]; j += 1 {
+						matrix_cell := get_cell(&cells, i, j)
+						if matrix_cell != powder.EMPTY {
+							render_pos := convert_to_screen_pos([2]int{ i, j })
+							color: Color
+							switch matrix_cell {
+							case powder.SNOW_ACTIVE, powder.SNOW_STATIC:
+								color = COLORS[8]
+							case powder.SOLID:
+								color = COLORS[6]
+							case powder.ICE:
+								color = COLORS[7]
+							case powder.PLAYER:
+								color = COLORS[4]
+							case powder.EMPTY, powder.EDGE:
+							}
+							DrawRectangle(i32(render_pos.x), i32(render_pos.y), i32(CAM_ZOOM), i32(CAM_ZOOM), color)
+						}
+					}
+				}
+			} else if !WALLHACK {
+				cells_to_draw := [dynamic][2]int{ }
+				cast_vision :: proc(i, j: int) {
+					ray_target := [2]f32{ f32(i), f32(j) }
+					ray_direction := linalg.vector_normalize(ray_target - [2]f32{ f32(player_cells[4].x), f32(player_cells[4].y) })
+					for step in 0..<(320 / CAM_ZOOM) {
+						curr_f := [2]f32{ f32(player_cells[4].x), f32(player_cells[4].y) } + ray_direction * f32(step)
+						curr_i := [2]int{ int(curr_f.x), int(curr_f.y)}
+						curr_cell := get_cell(&cells, curr_i.x, curr_i.y)
+						
+						render_pos := convert_to_screen_pos([2]int{ curr_i.x, curr_i.y })
 						color: Color
-						switch matrix_cell {
+						switch curr_cell {
 						case powder.SNOW_ACTIVE, powder.SNOW_STATIC:
 							color = COLORS[8]
 						case powder.SOLID:
@@ -153,53 +182,28 @@ main :: proc() {
 							color = COLORS[7]
 						case powder.PLAYER:
 							color = COLORS[4]
-						case powder.EMPTY, powder.EDGE:
+						case powder.EMPTY:
+							color = COLORS[0]
+						case powder.EDGE:
 						}
 						DrawRectangle(i32(render_pos.x), i32(render_pos.y), i32(CAM_ZOOM), i32(CAM_ZOOM), color)
+						
+						if curr_cell != powder.PLAYER && curr_cell != powder.EMPTY {
+							break
+						}
+					}
+				}
+				for j := screen_borders.y[0]; j < screen_borders.y[1]; j += 1 {
+					for i in screen_borders.x {
+						cast_vision(i, j)
+					}
+				}
+				for i := screen_borders.x[0]; i < screen_borders.x[1]; i += 1 {
+					for j in screen_borders.y {
+						cast_vision(i, j)
 					}
 				}
 			}
-			// cells_to_draw := [dynamic][2]int{ }
-			// cast_vision :: proc(i, j: int) {
-			// 	ray_target := [2]f32{ f32(i), f32(j) }
-			// 	ray_direction := linalg.vector_normalize(ray_target - [2]f32{ f32(player_cells[4].x), f32(player_cells[4].y) })
-			// 	for step in 0..<(320 / CAM_ZOOM) {
-			// 		curr_f := [2]f32{ f32(player_cells[4].x), f32(player_cells[4].y) } + ray_direction * f32(step)
-			// 		curr_i := [2]int{ int(curr_f.x), int(curr_f.y)}
-			// 		curr_cell := get_cell(&cells, curr_i.x, curr_i.y)
-					
-			// 		render_pos := convert_to_screen_pos([2]int{ curr_i.x, curr_i.y })
-			// 		color: Color
-			// 		switch curr_cell {
-			// 		case powder.SNOW_ACTIVE, powder.SNOW_STATIC:
-			// 			color = COLORS[8]
-			// 		case powder.SOLID:
-			// 			color = COLORS[6]
-			// 		case powder.ICE:
-			// 			color = COLORS[7]
-			// 		case powder.PLAYER:
-			// 			color = COLORS[4]
-			// 		case powder.EMPTY:
-			// 			color = COLORS[0]
-			// 		case powder.EDGE:
-			// 		}
-			// 		DrawRectangle(i32(render_pos.x), i32(render_pos.y), i32(CAM_ZOOM), i32(CAM_ZOOM), color)
-					
-			// 		if curr_cell != powder.PLAYER && curr_cell != powder.EMPTY {
-			// 			break
-			// 		}
-			// 	}
-			// }
-			// for j := screen_borders.y[0]; j < screen_borders.y[1]; j += 1 {
-			// 	for i in screen_borders.x {
-			// 		cast_vision(i, j)
-			// 	}
-			// }
-			// for i := screen_borders.x[0]; i < screen_borders.x[1]; i += 1 {
-			// 	for j in screen_borders.y {
-			// 		cast_vision(i, j)
-			// 	}
-			// }
 			
 			fps := 1 / GetFrameTime()
 			DrawText(strings.clone_to_cstring(fmt.tprint(int(fps))), 8, 8, 16, COLORS[4])
