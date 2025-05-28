@@ -21,17 +21,19 @@ matter_type :: enum {
 	WALL,
 }
 matter_state_type :: enum {
+	GAS,
 	SOLID,
 	POWDER,
 }
 powder_state_type :: enum {
-	ACTIVE,
 	STATIC,
+	ACTIVE,
 }
 tools :: enum {
 	DIG,
 	SOLID,
 }
+player_act_directions :: enum { LEFT, RIGHT, UP, DOWN }
 
 WORLD_SIZE := [2]int{ 640, 640 }
 CAM_ZOOM: int = 8
@@ -60,6 +62,12 @@ cells := make_cells()
 cells_next := make_cells()
 player_move_timer := 0
 active_tool := tools.DIG
+player_act_areas :[player_act_directions][3][2]int = {
+	.LEFT = {{ -1, 0 }, { -1, 1 }, { -1, 2 }},
+	.RIGHT = {{ 2, 0 }, { 2, 1 }, { 2, 2 }},
+	.UP = {{ 0, -1 }, { 1, -1 }, { 0, 0 }},
+	.DOWN = {{ 0, 3 }, { 1, 3 }, { 0, 0 }},
+}
 
 main :: proc() {
 	// RENDER SETUP
@@ -159,7 +167,7 @@ main :: proc() {
 							color: Color
 							switch curr_cell.matter {
 							case matter_type.WATER:
-								switch curr_cell.matter_state {
+								#partial switch curr_cell.matter_state {
 								case matter_state_type.POWDER:
 									color = COLORS[8]
 								case matter_state_type.SOLID:
@@ -189,7 +197,7 @@ main :: proc() {
 						color: Color
 						switch curr_cell.matter {
 						case matter_type.WATER:
-							switch curr_cell.matter_state {
+							#partial switch curr_cell.matter_state {
 							case matter_state_type.POWDER:
 								color = COLORS[8]
 							case matter_state_type.SOLID:
@@ -260,59 +268,55 @@ process_powder :: proc(cells: ^cell_matrix, cells_next: ^cell_matrix) {
 			}
 		}
 	}
-	
 	if !is_player_near_wall {
-		if get_cell(cells, player_cells[2].x, player_cells[2].y + 1).matter == matter_type.EMPTY &&
-		get_cell(cells, player_cells[5].x, player_cells[5].y + 1).matter == matter_type.EMPTY {
+		if get_cell(cells, player_cells[2].x, player_cells[2].y + 1).matter_state == matter_state_type.GAS &&
+		get_cell(cells, player_cells[5].x, player_cells[5].y + 1).matter_state == matter_state_type.GAS {
 			move_player({ 0, 1 })
 		}
 	}
 	if player_act_intent != { } {
-		for player_cell in player_cells {
-			target_pos := player_cell + player_act_intent
-			target_cell := get_cell(cells, target_pos.x, target_pos.y)
-			switch active_tool {
-			case tools.DIG:
-				if target_cell.matter_state == matter_state_type.SOLID {
-					target_cell.matter_state = matter_state_type.POWDER
-					set_cell(cells, target_pos.x, target_pos.y, target_cell)
-				} else if target_cell.matter_state == matter_state_type.POWDER {
-					set_cell(cells, target_pos.x, target_pos.y, make_empty_cell())
-				}
-			case tools.SOLID:
-				set_cell(cells, target_pos.x, target_pos.y, make_cell(matter_type.WALL, matter_state_type.SOLID, powder_state_type.STATIC))
-			}
+		act_direction: player_act_directions
+		switch player_act_intent {
+		case { -1, 0 }:
+			act_direction = player_act_directions.LEFT
+		case { 1, 0 }:
+			act_direction = player_act_directions.RIGHT
+		case { 0, -1 }:
+			act_direction = player_act_directions.UP
+		case { 0, 1 }:
+			act_direction = player_act_directions.DOWN
 		}
+		player_act_on_areas(act_direction)
 	} else {
 		if is_player_near_wall &&
 		player_move_intent.y == -1 &&
-		get_cell(cells, player_cells[0].x, player_cells[0].y - 1).matter == matter_type.EMPTY &&
-		get_cell(cells, player_cells[0].x + 1, player_cells[0].y - 1).matter == matter_type.EMPTY {
+		get_cell(cells, player_cells[0].x, player_cells[0].y - 1).matter_state == matter_state_type.GAS &&
+		get_cell(cells, player_cells[0].x + 1, player_cells[0].y - 1).matter_state == matter_state_type.GAS {
 			move_player({ 0, -1 })
 		}
 		else if is_player_near_wall &&
 		player_move_intent.y == 1 &&
-		get_cell(cells, player_cells[0].x, player_cells[0].y + 3).matter == matter_type.EMPTY &&
-		get_cell(cells, player_cells[0].x + 1, player_cells[0].y + 3).matter == matter_type.EMPTY {
+		get_cell(cells, player_cells[0].x, player_cells[0].y + 3).matter_state == matter_state_type.GAS &&
+		get_cell(cells, player_cells[0].x + 1, player_cells[0].y + 3).matter_state == matter_state_type.GAS {
 			move_player({ 0, 1 })
 		}
 		else if player_move_intent.x == -1 {
-			if get_cell(cells, player_cells[0].x - 1, player_cells[0].y).matter == matter_type.EMPTY &&
-			get_cell(cells, player_cells[1].x - 1, player_cells[1].y).matter == matter_type.EMPTY {
-				if get_cell(cells, player_cells[2].x - 1, player_cells[2].y).matter == matter_type.EMPTY {
+			if get_cell(cells, player_cells[0].x - 1, player_cells[0].y).matter_state == matter_state_type.GAS &&
+			get_cell(cells, player_cells[1].x - 1, player_cells[1].y).matter_state == matter_state_type.GAS {
+				if get_cell(cells, player_cells[2].x - 1, player_cells[2].y).matter_state == matter_state_type.GAS {
 					move_player({ -1, 0 })
-				} else if get_cell(cells, player_cells[0].x - 1, player_cells[0].y - 1).matter == matter_type.EMPTY &&
-				get_cell(cells, player_cells[3].x - 1, player_cells[3].y - 1).matter == matter_type.EMPTY {
+				} else if get_cell(cells, player_cells[0].x - 1, player_cells[0].y - 1).matter_state == matter_state_type.GAS &&
+				get_cell(cells, player_cells[3].x - 1, player_cells[3].y - 1).matter_state == matter_state_type.GAS {
 					move_player({ -1, -1 })
 				}
 			}
 		} else if player_move_intent.x == 1 {
-			if get_cell(cells, player_cells[3].x + 1, player_cells[3].y).matter == matter_type.EMPTY &&
-			get_cell(cells, player_cells[4].x + 1, player_cells[4].y).matter == matter_type.EMPTY {
-				if get_cell(cells, player_cells[5].x + 1, player_cells[5].y).matter == matter_type.EMPTY {
+			if get_cell(cells, player_cells[3].x + 1, player_cells[3].y).matter_state == matter_state_type.GAS &&
+			get_cell(cells, player_cells[4].x + 1, player_cells[4].y).matter_state == matter_state_type.GAS {
+				if get_cell(cells, player_cells[5].x + 1, player_cells[5].y).matter_state == matter_state_type.GAS {
 					move_player({ 1, 0 })
-				} else if get_cell(cells, player_cells[0].x + 1, player_cells[0].y - 1).matter == matter_type.EMPTY &&
-				get_cell(cells, player_cells[3].x + 1, player_cells[3].y - 1).matter == matter_type.EMPTY {
+				} else if get_cell(cells, player_cells[0].x + 1, player_cells[0].y - 1).matter_state == matter_state_type.GAS &&
+				get_cell(cells, player_cells[3].x + 1, player_cells[3].y - 1).matter_state == matter_state_type.GAS {
 					move_player({ 1, -1 })
 				}
 			}
@@ -337,22 +341,22 @@ process_powder :: proc(cells: ^cell_matrix, cells_next: ^cell_matrix) {
 						direction := rand.choice(possible_directions)
 						switch direction {
 						case "left":
-							if get_cell(cells, i - 1, j).matter != matter_type.EMPTY ||
-							get_cell(cells_next, i - 1, j).matter != matter_type.EMPTY {
+							if get_cell(cells, i - 1, j).matter_state != matter_state_type.GAS ||
+							get_cell(cells_next, i - 1, j).matter_state != matter_state_type.GAS {
 								set_cell(cells_next, i, j, curr_cell)
 							} else {
 								set_cell(cells_next, i - 1, j, curr_cell)
 							}
 						case "right":
-							if get_cell(cells, i + 1, j).matter != matter_type.EMPTY ||
-							get_cell(cells_next, i + 1, j).matter != matter_type.EMPTY {
+							if get_cell(cells, i + 1, j).matter_state != matter_state_type.GAS ||
+							get_cell(cells_next, i + 1, j).matter_state != matter_state_type.GAS {
 								set_cell(cells_next, i, j, curr_cell)
 							} else {
 								set_cell(cells_next, i + 1, j, curr_cell)
 							}
 						case "down":
-							if get_cell(cells, i, j + 1).matter != matter_type.EMPTY ||
-							get_cell(cells_next, i, j + 1).matter != matter_type.EMPTY {
+							if get_cell(cells, i, j + 1).matter_state != matter_state_type.GAS ||
+							get_cell(cells_next, i, j + 1).matter_state != matter_state_type.GAS {
 								set_cell(cells_next, i, j, curr_cell)
 							} else {
 								set_cell(cells_next, i, j + 1, curr_cell)
@@ -360,16 +364,16 @@ process_powder :: proc(cells: ^cell_matrix, cells_next: ^cell_matrix) {
 						}
 					}
 				case powder_state_type.STATIC:
-					if get_cell(cells, i, j + 1).matter != matter_type.EMPTY &&
-					get_cell(cells, i + 1, j + 1).matter != matter_type.EMPTY &&
-					get_cell(cells, i - 1, j + 1).matter != matter_type.EMPTY {
+					if get_cell(cells, i, j + 1).matter_state != matter_state_type.GAS &&
+					get_cell(cells, i + 1, j + 1).matter_state != matter_state_type.GAS &&
+					get_cell(cells, i - 1, j + 1).matter_state != matter_state_type.GAS {
 						set_cell(cells_next, i, j, curr_cell)
 					} else {
 						curr_cell.powder_state = powder_state_type.ACTIVE
 						set_cell(cells_next, i, j, curr_cell)
 					}
 				}
-			case matter_state_type.SOLID:
+			case matter_state_type.SOLID, matter_state_type.GAS:
 				set_cell(cells_next, i, j, curr_cell)
 			}
 		}
@@ -416,5 +420,24 @@ make_cell :: proc(matter: matter_type, matter_state: matter_state_type, powder_s
 }
 
 make_empty_cell :: proc() -> cell {
-	return cell{ matter_type.EMPTY, matter_state_type.SOLID, powder_state_type.STATIC }
+	return cell{ matter_type.EMPTY, matter_state_type.GAS, powder_state_type.STATIC }
+}
+
+player_act_on_areas :: proc(act_direction: player_act_directions) {
+	for local_target in player_act_areas[act_direction] {
+		if local_target == { 0, 0 } { continue }
+		target_pos := player_cells[0] + local_target
+		target_cell := get_cell(&cells, target_pos.x, target_pos.y)
+		switch active_tool {
+		case tools.DIG:
+			if target_cell.matter_state == matter_state_type.SOLID {
+				target_cell.matter_state = matter_state_type.POWDER
+				set_cell(&cells, target_pos.x, target_pos.y, target_cell)
+			} else if target_cell.matter_state == matter_state_type.POWDER {
+				set_cell(&cells, target_pos.x, target_pos.y, make_empty_cell())
+			}
+		case tools.SOLID:
+			set_cell(&cells, target_pos.x, target_pos.y, make_cell(matter_type.WALL, matter_state_type.SOLID, powder_state_type.STATIC))
+		}
+	}
 }
