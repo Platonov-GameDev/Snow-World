@@ -11,7 +11,6 @@ cell_matrix :: [dynamic][dynamic]cell
 cell :: struct {
 	matter: matter_type,
 	matter_state: matter_state_type,
-	powder_state: powder_state_type, // TODO deprecate
 }
 matter_type :: enum {
 	EMPTY,
@@ -85,9 +84,9 @@ main :: proc() {
 			case -1.0..<0:
 				set_cell(&cells, i, j, make_empty_cell())
 			case 0..<0.5:
-				set_cell(&cells, i, j, make_cell(matter_type.WATER, matter_state_type.SOLID, powder_state_type.STATIC))
+				set_cell(&cells, i, j, make_cell(matter_type.WATER, matter_state_type.SOLID))
 			case:
-				set_cell(&cells, i, j, make_cell(matter_type.WATER, matter_state_type.POWDER, powder_state_type.STATIC))
+				set_cell(&cells, i, j, make_cell(matter_type.WATER, matter_state_type.POWDER))
 			}
 		}
 	}
@@ -99,7 +98,7 @@ main :: proc() {
 	player_cells[4] = player_cells[0] + { 1, 1 }
 	player_cells[5] = player_cells[0] + { 1, 2 }
 	for player_cell in player_cells {
-		set_cell(&cells, player_cell.x, player_cell.y, make_cell(matter_type.PLAYER, matter_state_type.SOLID, powder_state_type.STATIC))
+		set_cell(&cells, player_cell.x, player_cell.y, make_cell(matter_type.PLAYER, matter_state_type.SOLID))
 	}
 	cam_pos = player_cells[0]
 	
@@ -144,7 +143,10 @@ main :: proc() {
 			active_tool = tools.SOLID
 		}
 		
-		// set_cell(&cells, rand.int_max(WORLD_SIZE.x), 0, powder.SNOW_ACTIVE)
+		snowflake_roll := rand.int31_max(5)
+		if snowflake_roll == 0 {
+			set_cell(&cells, rand.int_max(WORLD_SIZE.x), 0, make_cell(matter_type.WATER, matter_state_type.POWDER))
+		}
 		process_powder(&cells, &cells_next)
 		
 		{
@@ -329,6 +331,11 @@ process_powder :: proc(cells: ^cell_matrix, cells_next: ^cell_matrix) {
 			
 			switch curr_cell.matter_state {
 			case matter_state_type.POWDER:
+				erosion_roll := rand.int31_max(36000)
+				if erosion_roll == 0 {
+					continue
+				}
+				
 				if get_cell(cells, i - 1, j + 1).matter_state != matter_state_type.GAS && get_cell(cells, i, j + 1).matter_state != matter_state_type.GAS && get_cell(cells, i + 1, j + 1).matter_state != matter_state_type.GAS {
 					set_cell(cells_next, i, j, curr_cell)
 				} else {
@@ -359,6 +366,10 @@ process_powder :: proc(cells: ^cell_matrix, cells_next: ^cell_matrix) {
 					}
 				}
 			case matter_state_type.SOLID:
+				erosion_roll := rand.int31_max(36000)
+				if erosion_roll == 0 {
+					curr_cell.matter_state = matter_state_type.POWDER
+				}
 				set_cell(cells_next, i, j, curr_cell)
 			case matter_state_type.GAS:
 			}
@@ -382,14 +393,14 @@ move_player :: proc(move_vec: [2]int) {
 	}
 	for &player_cell in player_cells {
 		player_cell += move_vec
-		set_cell(&cells, player_cell.x, player_cell.y, make_cell(matter_type.PLAYER, matter_state_type.SOLID, powder_state_type.STATIC))
+		set_cell(&cells, player_cell.x, player_cell.y, make_cell(matter_type.PLAYER, matter_state_type.SOLID))
 	}
 	cam_pos = player_cells[0]
 }
 
 get_cell :: proc(target_cells: ^cell_matrix, x, y: int) -> cell {
 	if y >= WORLD_SIZE.y || y < 0 || x >= WORLD_SIZE.x || x < 0 {
-		return make_cell(matter_type.EDGE, matter_state_type.SOLID, powder_state_type.STATIC)
+		return make_cell(matter_type.EDGE, matter_state_type.SOLID)
 	} else {
 		return target_cells[x][y]
 	}
@@ -401,12 +412,12 @@ set_cell :: proc(target_cells: ^cell_matrix, x, y: int, value: cell) {
 	}
 }
 
-make_cell :: proc(matter: matter_type, matter_state: matter_state_type, powder_state: powder_state_type) -> cell {
-	return cell{ matter, matter_state, powder_state }
+make_cell :: proc(matter: matter_type, matter_state: matter_state_type) -> cell {
+	return cell{ matter, matter_state}
 }
 
 make_empty_cell :: proc() -> cell {
-	return cell{ matter_type.EMPTY, matter_state_type.GAS, powder_state_type.STATIC }
+	return cell{ matter_type.EMPTY, matter_state_type.GAS }
 }
 
 player_act_on_areas :: proc(act_direction: player_act_directions) {
@@ -423,7 +434,7 @@ player_act_on_areas :: proc(act_direction: player_act_directions) {
 				set_cell(&cells, target_pos.x, target_pos.y, make_empty_cell())
 			}
 		case tools.SOLID:
-			set_cell(&cells, target_pos.x, target_pos.y, make_cell(matter_type.WALL, matter_state_type.SOLID, powder_state_type.STATIC))
+			set_cell(&cells, target_pos.x, target_pos.y, make_cell(matter_type.WALL, matter_state_type.SOLID))
 		}
 	}
 }
