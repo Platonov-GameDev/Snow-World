@@ -410,7 +410,7 @@ get_cell :: proc(target_cells: ^cell_matrix, x, y: int) -> cell {
 }
 
 set_cell :: proc(target_cells: ^cell_matrix, x, y: int, value: cell) {
-	if y >= 0 && y < WORLD_SIZE.y || x >= WORLD_SIZE.x || x < 0 {
+	if y >= 0 && y < WORLD_SIZE.y && x < WORLD_SIZE.x && x >= 0 {
 		target_cells[x][y] = value
 	}
 }
