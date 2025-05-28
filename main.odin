@@ -7,15 +7,26 @@ import "core:math/noise"
 import "core:math/linalg"
 import "core:strings"
 
-cell_matrix :: [dynamic][dynamic]powder
-powder :: enum {
+cell_matrix :: [dynamic][dynamic]cell
+cell :: struct {
+	matter: matter_type,
+	matter_state: matter_state_type,
+	powder_state: powder_state_type,
+}
+matter_type :: enum {
 	EMPTY,
-	SNOW_ACTIVE,
-	SNOW_STATIC,
-	PLAYER,
-	SOLID,
-	ICE,
+	WATER,
 	EDGE,
+	PLAYER,
+	WALL,
+}
+matter_state_type :: enum {
+	SOLID,
+	POWDER,
+}
+powder_state_type :: enum {
+	ACTIVE,
+	STATIC,
 }
 tools :: enum {
 	DIG,
@@ -64,11 +75,11 @@ main :: proc() {
 		for j in column_height..<WORLD_SIZE.y {
 			switch noise.noise_2d(seed, { f64(i), f64(j) } / 20) {
 			case -1.0..<0:
-				set_cell(&cells, i, j, powder.EMPTY)
+				set_cell(&cells, i, j, make_empty_cell())
 			case 0..<0.5:
-				set_cell(&cells, i, j, powder.ICE)
+				set_cell(&cells, i, j, make_cell(matter_type.WATER, matter_state_type.SOLID, powder_state_type.STATIC))
 			case:
-				set_cell(&cells, i, j, powder.SNOW_STATIC)
+				set_cell(&cells, i, j, make_cell(matter_type.WATER, matter_state_type.POWDER, powder_state_type.STATIC))
 			}
 		}
 	}
@@ -80,7 +91,7 @@ main :: proc() {
 	player_cells[4] = player_cells[0] + { 1, 1 }
 	player_cells[5] = player_cells[0] + { 1, 2 }
 	for player_cell in player_cells {
-		set_cell(&cells, player_cell.x, player_cell.y, powder.PLAYER)
+		set_cell(&cells, player_cell.x, player_cell.y, make_cell(matter_type.PLAYER, matter_state_type.SOLID, powder_state_type.STATIC))
 	}
 	cam_pos = player_cells[0]
 	
@@ -142,20 +153,23 @@ main :: proc() {
 			if WALLHACK {
 				for i := screen_borders.x[0]; i < screen_borders.x[1]; i += 1 {
 					for j := screen_borders.y[0]; j < screen_borders.y[1]; j += 1 {
-						matrix_cell := get_cell(&cells, i, j)
-						if matrix_cell != powder.EMPTY {
+						curr_cell := get_cell(&cells, i, j)
+						if curr_cell.matter != matter_type.EMPTY {
 							render_pos := convert_to_screen_pos([2]int{ i, j })
 							color: Color
-							switch matrix_cell {
-							case powder.SNOW_ACTIVE, powder.SNOW_STATIC:
-								color = COLORS[8]
-							case powder.SOLID:
-								color = COLORS[6]
-							case powder.ICE:
-								color = COLORS[7]
-							case powder.PLAYER:
+							switch curr_cell.matter {
+							case matter_type.WATER:
+								switch curr_cell.matter_state {
+								case matter_state_type.POWDER:
+									color = COLORS[8]
+								case matter_state_type.SOLID:
+									color = COLORS[7]
+								}
+							case matter_type.PLAYER:
 								color = COLORS[4]
-							case powder.EMPTY, powder.EDGE:
+							case matter_type.WALL:
+								color = COLORS[6]
+							case matter_type.EMPTY, matter_type.EDGE:
 							}
 							DrawRectangle(i32(render_pos.x), i32(render_pos.y), i32(CAM_ZOOM), i32(CAM_ZOOM), color)
 						}
@@ -173,22 +187,25 @@ main :: proc() {
 						
 						render_pos := convert_to_screen_pos([2]int{ curr_i.x, curr_i.y })
 						color: Color
-						switch curr_cell {
-						case powder.SNOW_ACTIVE, powder.SNOW_STATIC:
-							color = COLORS[8]
-						case powder.SOLID:
-							color = COLORS[6]
-						case powder.ICE:
-							color = COLORS[7]
-						case powder.PLAYER:
+						switch curr_cell.matter {
+						case matter_type.WATER:
+							switch curr_cell.matter_state {
+							case matter_state_type.POWDER:
+								color = COLORS[8]
+							case matter_state_type.SOLID:
+								color = COLORS[7]
+							}
+						case matter_type.PLAYER:
 							color = COLORS[4]
-						case powder.EMPTY:
+						case matter_type.WALL:
+							color = COLORS[6]
+						case matter_type.EMPTY:
 							color = COLORS[0]
-						case powder.EDGE:
+						case matter_type.EDGE:
 						}
 						DrawRectangle(i32(render_pos.x), i32(render_pos.y), i32(CAM_ZOOM), i32(CAM_ZOOM), color)
 						
-						if curr_cell != powder.PLAYER && curr_cell != powder.EMPTY {
+						if curr_cell.matter != matter_type.PLAYER && curr_cell.matter != matter_type.EMPTY {
 							break
 						}
 					}
@@ -229,7 +246,7 @@ make_cells :: proc() -> cell_matrix {
 process_powder :: proc(cells: ^cell_matrix, cells_next: ^cell_matrix) {
 	for i := 0; i < WORLD_SIZE.x; i += 1 {
 		for j := 0; j < WORLD_SIZE.y; j += 1 {
-			set_cell(cells_next, i, j, powder.EMPTY)
+			set_cell(cells_next, i, j, make_empty_cell())
 		}
 	}
 	
@@ -237,16 +254,16 @@ process_powder :: proc(cells: ^cell_matrix, cells_next: ^cell_matrix) {
 	{
 		player_pos := player_cells[0]
 		for i in -1..=2 {
-			if get_cell(cells, player_pos.x - 1, player_pos.y + i) != powder.EMPTY ||
-			get_cell(cells, player_pos.x + 2, player_pos.y + i) != powder.EMPTY {
+			if get_cell(cells, player_pos.x - 1, player_pos.y + i).matter_state == matter_state_type.SOLID ||
+			get_cell(cells, player_pos.x + 2, player_pos.y + i).matter_state == matter_state_type.SOLID {
 				is_player_near_wall = true
 			}
 		}
 	}
 	
 	if !is_player_near_wall {
-		if get_cell(cells, player_cells[2].x, player_cells[2].y + 1) == powder.EMPTY &&
-		get_cell(cells, player_cells[5].x, player_cells[5].y + 1) == powder.EMPTY {
+		if get_cell(cells, player_cells[2].x, player_cells[2].y + 1).matter == matter_type.EMPTY &&
+		get_cell(cells, player_cells[5].x, player_cells[5].y + 1).matter == matter_type.EMPTY {
 			move_player({ 0, 1 })
 		}
 	}
@@ -256,50 +273,46 @@ process_powder :: proc(cells: ^cell_matrix, cells_next: ^cell_matrix) {
 			target_cell := get_cell(cells, target_pos.x, target_pos.y)
 			switch active_tool {
 			case tools.DIG:
-				if target_cell == powder.SNOW_ACTIVE ||
-				target_cell == powder.SNOW_STATIC ||
-				target_cell == powder.SOLID ||
-				target_cell == powder.ICE {
-					set_cell(cells, target_pos.x, target_pos.y, powder.EMPTY)
+				if target_cell.matter_state == matter_state_type.SOLID {
+					target_cell.matter_state = matter_state_type.POWDER
+					set_cell(cells, target_pos.x, target_pos.y, target_cell)
+				} else if target_cell.matter_state == matter_state_type.POWDER {
+					set_cell(cells, target_pos.x, target_pos.y, make_empty_cell())
 				}
 			case tools.SOLID:
-				if target_cell == powder.SNOW_ACTIVE ||
-				target_cell == powder.SNOW_STATIC ||
-				target_cell == powder.EMPTY {
-					set_cell(cells, target_pos.x, target_pos.y, powder.SOLID)
-				}
+				set_cell(cells, target_pos.x, target_pos.y, make_cell(matter_type.WALL, matter_state_type.SOLID, powder_state_type.STATIC))
 			}
 		}
 	} else {
 		if is_player_near_wall &&
 		player_move_intent.y == -1 &&
-		get_cell(cells, player_cells[0].x, player_cells[0].y - 1) == powder.EMPTY &&
-		get_cell(cells, player_cells[0].x + 1, player_cells[0].y - 1) == powder.EMPTY {
+		get_cell(cells, player_cells[0].x, player_cells[0].y - 1).matter == matter_type.EMPTY &&
+		get_cell(cells, player_cells[0].x + 1, player_cells[0].y - 1).matter == matter_type.EMPTY {
 			move_player({ 0, -1 })
 		}
 		else if is_player_near_wall &&
 		player_move_intent.y == 1 &&
-		get_cell(cells, player_cells[0].x, player_cells[0].y + 3) == powder.EMPTY &&
-		get_cell(cells, player_cells[0].x + 1, player_cells[0].y + 3) == powder.EMPTY {
+		get_cell(cells, player_cells[0].x, player_cells[0].y + 3).matter == matter_type.EMPTY &&
+		get_cell(cells, player_cells[0].x + 1, player_cells[0].y + 3).matter == matter_type.EMPTY {
 			move_player({ 0, 1 })
 		}
 		else if player_move_intent.x == -1 {
-			if get_cell(cells, player_cells[0].x - 1, player_cells[0].y) == powder.EMPTY &&
-			get_cell(cells, player_cells[1].x - 1, player_cells[1].y) == powder.EMPTY {
-				if get_cell(cells, player_cells[2].x - 1, player_cells[2].y) == powder.EMPTY {
+			if get_cell(cells, player_cells[0].x - 1, player_cells[0].y).matter == matter_type.EMPTY &&
+			get_cell(cells, player_cells[1].x - 1, player_cells[1].y).matter == matter_type.EMPTY {
+				if get_cell(cells, player_cells[2].x - 1, player_cells[2].y).matter == matter_type.EMPTY {
 					move_player({ -1, 0 })
-				} else if get_cell(cells, player_cells[0].x - 1, player_cells[0].y - 1) == powder.EMPTY &&
-				get_cell(cells, player_cells[3].x - 1, player_cells[3].y - 1) == powder.EMPTY {
+				} else if get_cell(cells, player_cells[0].x - 1, player_cells[0].y - 1).matter == matter_type.EMPTY &&
+				get_cell(cells, player_cells[3].x - 1, player_cells[3].y - 1).matter == matter_type.EMPTY {
 					move_player({ -1, -1 })
 				}
 			}
 		} else if player_move_intent.x == 1 {
-			if get_cell(cells, player_cells[3].x + 1, player_cells[3].y) == powder.EMPTY &&
-			get_cell(cells, player_cells[4].x + 1, player_cells[4].y) == powder.EMPTY {
-				if get_cell(cells, player_cells[5].x + 1, player_cells[5].y) == powder.EMPTY {
+			if get_cell(cells, player_cells[3].x + 1, player_cells[3].y).matter == matter_type.EMPTY &&
+			get_cell(cells, player_cells[4].x + 1, player_cells[4].y).matter == matter_type.EMPTY {
+				if get_cell(cells, player_cells[5].x + 1, player_cells[5].y).matter == matter_type.EMPTY {
 					move_player({ 1, 0 })
-				} else if get_cell(cells, player_cells[0].x + 1, player_cells[0].y - 1) == powder.EMPTY &&
-				get_cell(cells, player_cells[3].x + 1, player_cells[3].y - 1) == powder.EMPTY {
+				} else if get_cell(cells, player_cells[0].x + 1, player_cells[0].y - 1).matter == matter_type.EMPTY &&
+				get_cell(cells, player_cells[3].x + 1, player_cells[3].y - 1).matter == matter_type.EMPTY {
 					move_player({ 1, -1 })
 				}
 			}
@@ -308,50 +321,56 @@ process_powder :: proc(cells: ^cell_matrix, cells_next: ^cell_matrix) {
 	
 	for i := 0; i < WORLD_SIZE.x; i += 1 {
 		for j := 0; j < WORLD_SIZE.y; j += 1 {
-			switch get_cell(cells, i, j) {
-			case powder.SNOW_ACTIVE:
-				if get_cell(cells, i, j + 1) != powder.EMPTY &&
-				get_cell(cells, i + 1, j + 1) != powder.EMPTY &&
-				get_cell(cells, i - 1, j + 1) != powder.EMPTY {
-					set_cell(cells_next, i, j, powder.SNOW_STATIC)
-				} else {
-					possible_directions := []string{ "left", "right", "down" }
-					direction := rand.choice(possible_directions)
-					switch direction {
-					case "left":
-						if get_cell(cells, i - 1, j) != powder.EMPTY ||
-						get_cell(cells_next, i - 1, j) != powder.EMPTY {
-							set_cell(cells_next, i, j, powder.SNOW_ACTIVE)
-						} else {
-							set_cell(cells_next, i - 1, j, powder.SNOW_ACTIVE)
-						}
-					case "right":
-						if get_cell(cells, i + 1, j) != powder.EMPTY ||
-						get_cell(cells_next, i + 1, j) != powder.EMPTY {
-							set_cell(cells_next, i, j, powder.SNOW_ACTIVE)
-						} else {
-							set_cell(cells_next, i + 1, j, powder.SNOW_ACTIVE)
-						}
-					case "down":
-						if get_cell(cells, i, j + 1) != powder.EMPTY ||
-						get_cell(cells_next, i, j + 1) != powder.EMPTY {
-							set_cell(cells_next, i, j, powder.SNOW_ACTIVE)
-						} else {
-							set_cell(cells_next, i, j + 1, powder.SNOW_ACTIVE)
+			curr_cell := get_cell(cells, i, j)
+			
+			switch curr_cell.matter_state {
+			case matter_state_type.POWDER:
+				switch curr_cell.powder_state {
+				case powder_state_type.ACTIVE:
+					if get_cell(cells, i, j + 1).matter != matter_type.EMPTY &&
+					get_cell(cells, i + 1, j + 1).matter != matter_type.EMPTY &&
+					get_cell(cells, i - 1, j + 1).matter != matter_type.EMPTY {
+						curr_cell.powder_state = powder_state_type.STATIC
+						set_cell(cells_next, i, j, curr_cell)
+					} else {
+						possible_directions := []string{ "left", "right", "down" }
+						direction := rand.choice(possible_directions)
+						switch direction {
+						case "left":
+							if get_cell(cells, i - 1, j).matter != matter_type.EMPTY ||
+							get_cell(cells_next, i - 1, j).matter != matter_type.EMPTY {
+								set_cell(cells_next, i, j, curr_cell)
+							} else {
+								set_cell(cells_next, i - 1, j, curr_cell)
+							}
+						case "right":
+							if get_cell(cells, i + 1, j).matter != matter_type.EMPTY ||
+							get_cell(cells_next, i + 1, j).matter != matter_type.EMPTY {
+								set_cell(cells_next, i, j, curr_cell)
+							} else {
+								set_cell(cells_next, i + 1, j, curr_cell)
+							}
+						case "down":
+							if get_cell(cells, i, j + 1).matter != matter_type.EMPTY ||
+							get_cell(cells_next, i, j + 1).matter != matter_type.EMPTY {
+								set_cell(cells_next, i, j, curr_cell)
+							} else {
+								set_cell(cells_next, i, j + 1, curr_cell)
+							}
 						}
 					}
+				case powder_state_type.STATIC:
+					if get_cell(cells, i, j + 1).matter != matter_type.EMPTY &&
+					get_cell(cells, i + 1, j + 1).matter != matter_type.EMPTY &&
+					get_cell(cells, i - 1, j + 1).matter != matter_type.EMPTY {
+						set_cell(cells_next, i, j, curr_cell)
+					} else {
+						curr_cell.powder_state = powder_state_type.ACTIVE
+						set_cell(cells_next, i, j, curr_cell)
+					}
 				}
-			case powder.SNOW_STATIC:
-				if get_cell(cells, i, j + 1) != powder.EMPTY &&
-				get_cell(cells, i + 1, j + 1) != powder.EMPTY &&
-				get_cell(cells, i - 1, j + 1) != powder.EMPTY {
-					set_cell(cells_next, i, j, powder.SNOW_STATIC)
-				} else {
-					set_cell(cells_next, i, j, powder.SNOW_ACTIVE)
-				}
-			case powder.PLAYER, powder.SOLID, powder.ICE, powder.EDGE:
-				set_cell(cells_next, i, j, get_cell(cells, i, j))
-			case powder.EMPTY:
+			case matter_state_type.SOLID:
+				set_cell(cells_next, i, j, curr_cell)
 			}
 		}
 	}
@@ -369,25 +388,33 @@ convert_to_screen_pos :: proc(global_pos: [2]int) -> [2]int {
 
 move_player :: proc(move_vec: [2]int) {
 	for &player_cell in player_cells {
-		set_cell(&cells, player_cell.x, player_cell.y, powder.EMPTY)
+		set_cell(&cells, player_cell.x, player_cell.y, make_empty_cell())
 	}
 	for &player_cell in player_cells {
 		player_cell += move_vec
-		set_cell(&cells, player_cell.x, player_cell.y, powder.PLAYER)
+		set_cell(&cells, player_cell.x, player_cell.y, make_cell(matter_type.PLAYER, matter_state_type.SOLID, powder_state_type.STATIC))
 	}
 	cam_pos = player_cells[0]
 }
 
-get_cell :: proc(target_cells: ^cell_matrix, x, y: int) -> powder {
+get_cell :: proc(target_cells: ^cell_matrix, x, y: int) -> cell {
 	if y >= WORLD_SIZE.y || y < 0 || x >= WORLD_SIZE.x || x < 0 {
-		return powder.EDGE
+		return make_cell(matter_type.EDGE, matter_state_type.SOLID, powder_state_type.STATIC)
 	} else {
 		return target_cells[x][y]
 	}
 }
 
-set_cell :: proc(target_cells: ^cell_matrix, x, y: int, value: powder) {
+set_cell :: proc(target_cells: ^cell_matrix, x, y: int, value: cell) {
 	if y >= 0 && y < WORLD_SIZE.y || x >= WORLD_SIZE.x || x < 0 {
 		target_cells[x][y] = value
 	}
+}
+
+make_cell :: proc(matter: matter_type, matter_state: matter_state_type, powder_state: powder_state_type) -> cell {
+	return cell{ matter, matter_state, powder_state }
+}
+
+make_empty_cell :: proc() -> cell {
+	return cell{ matter_type.EMPTY, matter_state_type.SOLID, powder_state_type.STATIC }
 }
