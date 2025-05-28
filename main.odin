@@ -11,7 +11,7 @@ cell_matrix :: [dynamic][dynamic]cell
 cell :: struct {
 	matter: matter_type,
 	matter_state: matter_state_type,
-	powder_state: powder_state_type,
+	powder_state: powder_state_type, // TODO deprecate
 }
 matter_type :: enum {
 	EMPTY,
@@ -262,8 +262,8 @@ process_powder :: proc(cells: ^cell_matrix, cells_next: ^cell_matrix) {
 	{
 		player_pos := player_cells[0]
 		for i in -1..=2 {
-			if get_cell(cells, player_pos.x - 1, player_pos.y + i).matter_state == matter_state_type.SOLID ||
-			get_cell(cells, player_pos.x + 2, player_pos.y + i).matter_state == matter_state_type.SOLID {
+			if get_cell(cells, player_pos.x - 1, player_pos.y + i).matter_state != matter_state_type.GAS ||
+			get_cell(cells, player_pos.x + 2, player_pos.y + i).matter_state != matter_state_type.GAS {
 				is_player_near_wall = true
 			}
 		}
@@ -329,52 +329,38 @@ process_powder :: proc(cells: ^cell_matrix, cells_next: ^cell_matrix) {
 			
 			switch curr_cell.matter_state {
 			case matter_state_type.POWDER:
-				switch curr_cell.powder_state {
-				case powder_state_type.ACTIVE:
-					if get_cell(cells, i, j + 1).matter != matter_type.EMPTY &&
-					get_cell(cells, i + 1, j + 1).matter != matter_type.EMPTY &&
-					get_cell(cells, i - 1, j + 1).matter != matter_type.EMPTY {
-						curr_cell.powder_state = powder_state_type.STATIC
-						set_cell(cells_next, i, j, curr_cell)
-					} else {
-						possible_directions := []string{ "left", "right", "down" }
-						direction := rand.choice(possible_directions)
-						switch direction {
-						case "left":
-							if get_cell(cells, i - 1, j).matter_state != matter_state_type.GAS ||
-							get_cell(cells_next, i - 1, j).matter_state != matter_state_type.GAS {
-								set_cell(cells_next, i, j, curr_cell)
-							} else {
-								set_cell(cells_next, i - 1, j, curr_cell)
-							}
-						case "right":
-							if get_cell(cells, i + 1, j).matter_state != matter_state_type.GAS ||
-							get_cell(cells_next, i + 1, j).matter_state != matter_state_type.GAS {
-								set_cell(cells_next, i, j, curr_cell)
-							} else {
-								set_cell(cells_next, i + 1, j, curr_cell)
-							}
-						case "down":
-							if get_cell(cells, i, j + 1).matter_state != matter_state_type.GAS ||
-							get_cell(cells_next, i, j + 1).matter_state != matter_state_type.GAS {
-								set_cell(cells_next, i, j, curr_cell)
-							} else {
-								set_cell(cells_next, i, j + 1, curr_cell)
-							}
+				if get_cell(cells, i - 1, j + 1).matter_state != matter_state_type.GAS && get_cell(cells, i, j + 1).matter_state != matter_state_type.GAS && get_cell(cells, i + 1, j + 1).matter_state != matter_state_type.GAS {
+					set_cell(cells_next, i, j, curr_cell)
+				} else {
+					possible_directions := []string{ "left", "right", "down" }
+					direction := rand.choice(possible_directions)
+					switch direction {
+					case "left":
+						if get_cell(cells, i - 1, j).matter_state != matter_state_type.GAS ||
+						get_cell(cells_next, i - 1, j).matter_state != matter_state_type.GAS {
+							set_cell(cells_next, i, j, curr_cell)
+						} else {
+							set_cell(cells_next, i - 1, j, curr_cell)
+						}
+					case "right":
+						if get_cell(cells, i + 1, j).matter_state != matter_state_type.GAS ||
+						get_cell(cells_next, i + 1, j).matter_state != matter_state_type.GAS {
+							set_cell(cells_next, i, j, curr_cell)
+						} else {
+							set_cell(cells_next, i + 1, j, curr_cell)
+						}
+					case "down":
+						if get_cell(cells, i, j + 1).matter_state != matter_state_type.GAS ||
+						get_cell(cells_next, i, j + 1).matter_state != matter_state_type.GAS {
+							set_cell(cells_next, i, j, curr_cell)
+						} else {
+							set_cell(cells_next, i, j + 1, curr_cell)
 						}
 					}
-				case powder_state_type.STATIC:
-					if get_cell(cells, i, j + 1).matter_state != matter_state_type.GAS &&
-					get_cell(cells, i + 1, j + 1).matter_state != matter_state_type.GAS &&
-					get_cell(cells, i - 1, j + 1).matter_state != matter_state_type.GAS {
-						set_cell(cells_next, i, j, curr_cell)
-					} else {
-						curr_cell.powder_state = powder_state_type.ACTIVE
-						set_cell(cells_next, i, j, curr_cell)
-					}
 				}
-			case matter_state_type.SOLID, matter_state_type.GAS:
+			case matter_state_type.SOLID:
 				set_cell(cells_next, i, j, curr_cell)
+			case matter_state_type.GAS:
 			}
 		}
 	}

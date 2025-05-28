@@ -1,0 +1,10 @@
+~250528
+-[+] make basic falling sand world with player
+-[+] generalize cell objects
+-[+] make up design pillar
+-[+] fix player levitation
+-[+] fix player act area
+-[+] fix powder dissapearing
+
+-[ ] make it all crumble down slowly with time. so every solid can turn into powder, and powder can dissipate
+	then snow can fall from the sky again, hooray
