@@ -329,9 +329,9 @@ process_powder :: proc(cells: ^cell_matrix, cells_next: ^cell_matrix) {
 		for j := 0; j < WORLD_SIZE.y; j += 1 {
 			curr_cell := get_cell(cells, i, j)
 			
+			erosion_roll := rand.int31_max(72000)
 			switch curr_cell.matter_state {
 			case matter_state_type.POWDER:
-				erosion_roll := rand.int31_max(36000)
 				if erosion_roll == 0 {
 					continue
 				}
@@ -366,7 +366,6 @@ process_powder :: proc(cells: ^cell_matrix, cells_next: ^cell_matrix) {
 					}
 				}
 			case matter_state_type.SOLID:
-				erosion_roll := rand.int31_max(36000)
 				if erosion_roll == 0 {
 					curr_cell.matter_state = matter_state_type.POWDER
 				}

@@ -1,7 +1,7 @@
 ~250528
--[+] make basic falling sand world with player
+-[+] make basic falling snow world with player
+-[+] decide on design pillar
 -[+] generalize cell objects
--[+] make up design pillar
 -[+] fix player levitation
 -[+] fix player act area
 -[+] fix powder dissapearing
